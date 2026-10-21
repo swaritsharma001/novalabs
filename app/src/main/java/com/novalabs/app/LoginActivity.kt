@@ -87,7 +87,7 @@ class LoginActivity : AppCompatActivity() {
     ) {
         Toast.makeText(this, "Signing in...", Toast.LENGTH_SHORT).show()
 
-        DiscordAuthService.login(email, pass, captchaKey, captchaRqToken) { result ->
+        DiscordAuthService.login(this, email, pass, captchaKey, captchaRqToken) { result ->
             when (result) {
                 is DiscordAuthService.LoginResult.Success -> {
                     Toast.makeText(this, "Login successful!", Toast.LENGTH_SHORT).show()
@@ -151,7 +151,7 @@ class LoginActivity : AppCompatActivity() {
             .setPositiveButton("Verify") { _, _ ->
                 val code = input.text.toString().trim()
                 if (code.isNotEmpty()) {
-                    DiscordAuthService.submitMfaCode(ticket, code) { result ->
+                    DiscordAuthService.submitMfaCode(this, ticket, code) { result ->
                         if (result is DiscordAuthService.LoginResult.Success) {
                             Toast.makeText(this, "Authentication verified!", Toast.LENGTH_SHORT).show()
                             saveSessionAndProceed(result.token, result.username, result.userId)
@@ -228,8 +228,10 @@ class LoginActivity : AppCompatActivity() {
                 val url = URL("https://discord.com/api/v9/users/@me")
                 val connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    setRequestProperty("Authorization", token)
-                    setRequestProperty("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:126.0)")
+                    val headers = ReactNativeSpoof.makeHeaderMap(this@LoginActivity, token)
+                    headers.forEach { (k, v) ->
+                        setRequestProperty(k, v)
+                    }
                     connectTimeout = 7000
                     readTimeout = 7000
                 }

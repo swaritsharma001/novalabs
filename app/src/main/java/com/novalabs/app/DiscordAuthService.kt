@@ -1,5 +1,6 @@
 package com.novalabs.app
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Base64
@@ -11,11 +12,13 @@ import java.nio.charset.StandardCharsets
 
 object DiscordAuthService {
 
+    private const val EXPERIMENTS_ENDPOINT = "https://discord.com/api/v9/experiments"
     private const val LOGIN_ENDPOINT = "https://discord.com/api/v9/auth/login"
     private const val TOTP_ENDPOINT = "https://discord.com/api/v9/auth/mfa/totp"
     private const val USER_ME_ENDPOINT = "https://discord.com/api/v9/users/@me"
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var cachedFingerprint: String? = null
 
     sealed class LoginResult {
         data class Success(val token: String, val userId: String, val username: String) : LoginResult()
@@ -25,9 +28,10 @@ object DiscordAuthService {
     }
 
     /**
-     * Executes Discord credential login with support for Captcha tokens and rqtokens
+     * Executes Discord credential login matching Bluecord's exact headers and session fingerprint
      */
     fun login(
+        context: Context,
         email: String,
         pass: String,
         captchaKey: String? = null,
@@ -36,14 +40,36 @@ object DiscordAuthService {
     ) {
         Thread {
             try {
+                // Step 1: Ensure session has a valid pre-flight fingerprint from /experiments
+                if (cachedFingerprint.isNullOrEmpty()) {
+                    cachedFingerprint = fetchExperimentsFingerprint(context)
+                }
+
                 val url = URL(LOGIN_ENDPOINT)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("User-Agent", "Discord-Android/126021")
-                    setRequestProperty("X-Super-Properties", getSuperProperties())
-                    connectTimeout = 10000
-                    readTimeout = 10000
+                    
+                    // Match Bluecord's exact header dictionary from ReactNativeSpoof
+                    val headers = ReactNativeSpoof.makeHeaderMap(
+                        context = context,
+                        authToken = null,
+                        fingerprint = cachedFingerprint
+                    )
+                    headers.forEach { (k, v) ->
+                        setRequestProperty(k, v)
+                    }
+
+                    // Attach captcha headers if retrying after captcha challenge
+                    if (!captchaKey.isNullOrEmpty()) {
+                        setRequestProperty("x-captcha-key", captchaKey)
+                    }
+                    if (!captchaRqToken.isNullOrEmpty()) {
+                        setRequestProperty("x-captcha-rqtoken", captchaRqToken)
+                    }
+
+                    connectTimeout = 12000
+                    readTimeout = 12000
                     doOutput = true
                 }
 
@@ -51,6 +77,8 @@ object DiscordAuthService {
                     put("login", email)
                     put("password", pass)
                     put("undelete", false)
+                    put("login_source", JSONObject.NULL)
+                    put("gift_code_sku_id", JSONObject.NULL)
                     if (!captchaKey.isNullOrEmpty()) {
                         put("captcha_key", captchaKey)
                     }
@@ -72,7 +100,7 @@ object DiscordAuthService {
                     if (json.has("token")) {
                         val token = json.getString("token")
                         val userId = json.optString("user_id", "")
-                        fetchUserInfo(token, userId) { result ->
+                        fetchUserInfo(context, token, userId) { result ->
                             mainHandler.post { callback(result) }
                         }
                         return@Thread
@@ -92,12 +120,13 @@ object DiscordAuthService {
                     return@Thread
                 }
 
-                // Error handling
+                // Error message parsing
                 val errorMessage = when {
                     json.has("message") -> json.getString("message")
                     json.has("email") -> json.getJSONArray("email").join(", ")
                     json.has("password") -> json.getJSONArray("password").join(", ")
-                    else -> "Login failed with HTTP status $responseCode"
+                    json.has("login") -> json.getJSONArray("login").join(", ")
+                    else -> "Login failed (HTTP $responseCode)"
                 }
 
                 mainHandler.post { callback(LoginResult.Error(errorMessage)) }
@@ -109,16 +138,25 @@ object DiscordAuthService {
     }
 
     /**
-     * Resolves 2FA / MFA TOTP verification
+     * Resolves 2FA / MFA TOTP verification using Bluecord headers
      */
-    fun submitMfaCode(ticket: String, code: String, callback: (LoginResult) -> Unit) {
+    fun submitMfaCode(context: Context, ticket: String, code: String, callback: (LoginResult) -> Unit) {
         Thread {
             try {
                 val url = URL(TOTP_ENDPOINT)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("User-Agent", "Discord-Android/126021")
+                    
+                    val headers = ReactNativeSpoof.makeHeaderMap(
+                        context = context,
+                        authToken = null,
+                        fingerprint = cachedFingerprint
+                    )
+                    headers.forEach { (k, v) ->
+                        setRequestProperty(k, v)
+                    }
+
                     connectTimeout = 8000
                     readTimeout = 8000
                     doOutput = true
@@ -127,6 +165,7 @@ object DiscordAuthService {
                 val payload = JSONObject().apply {
                     put("ticket", ticket)
                     put("code", code)
+                    put("login_source", JSONObject.NULL)
                 }
 
                 conn.outputStream.use {
@@ -141,7 +180,7 @@ object DiscordAuthService {
                 if (responseCode == 200 && json.has("token")) {
                     val token = json.getString("token")
                     val userId = json.optString("user_id", "")
-                    fetchUserInfo(token, userId) { result ->
+                    fetchUserInfo(context, token, userId) { result ->
                         mainHandler.post { callback(result) }
                     }
                 } else {
@@ -155,15 +194,42 @@ object DiscordAuthService {
     }
 
     /**
+     * Bluecord login initiation: fetches initial fingerprint from Discord experiments
+     */
+    private fun fetchExperimentsFingerprint(context: Context): String? {
+        return try {
+            val url = URL(EXPERIMENTS_ENDPOINT)
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                val headers = ReactNativeSpoof.makeHeaderMap(context, null, null)
+                headers.forEach { (k, v) ->
+                    setRequestProperty(k, v)
+                }
+                connectTimeout = 6000
+                readTimeout = 6000
+            }
+            if (conn.responseCode == 200) {
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(body)
+                json.optString("fingerprint", null)
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
      * Retrieves user profile details using the newly acquired authorization token
      */
-    private fun fetchUserInfo(token: String, fallbackUserId: String, onDone: (LoginResult) -> Unit) {
+    private fun fetchUserInfo(context: Context, token: String, fallbackUserId: String, onDone: (LoginResult) -> Unit) {
         try {
             val url = URL(USER_ME_ENDPOINT)
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
-                setRequestProperty("Authorization", token)
-                setRequestProperty("User-Agent", "Discord-Android/126021")
+                val headers = ReactNativeSpoof.makeHeaderMap(context, token, cachedFingerprint)
+                headers.forEach { (k, v) ->
+                    setRequestProperty(k, v)
+                }
                 connectTimeout = 6000
                 readTimeout = 6000
             }
@@ -188,18 +254,5 @@ object DiscordAuthService {
         }
         if (resolvedUserId.isEmpty()) resolvedUserId = "10839201948102"
         onDone(LoginResult.Success(token, resolvedUserId, "User_${resolvedUserId.takeLast(4)}"))
-    }
-
-    private fun getSuperProperties(): String {
-        val props = JSONObject().apply {
-            put("os", "Android")
-            put("browser", "Discord Android")
-            put("device", "NovaLabs")
-            put("system_locale", "en-US")
-            put("client_version", "126.21")
-            put("client_build_number", 126021)
-            put("release_channel", "googleRelease")
-        }
-        return Base64.encodeToString(props.toString().toByteArray(StandardCharsets.UTF_8), Base64.NO_WRAP)
     }
 }
