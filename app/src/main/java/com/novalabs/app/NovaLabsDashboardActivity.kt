@@ -195,15 +195,35 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
 
         // PopPay & UPI Payments
         btnPayPopPayUpi.setOnClickListener {
-            val opened = PopPayClient.openUpiIntent(this, amount = "100")
-            if (!opened) {
-                Toast.makeText(this, "No UPI app found. Opening PopPay checkout portal...", Toast.LENGTH_SHORT).show()
-                PopPayClient.openPopPayWebCheckout(this)
+            val token = currentSession?.token ?: ""
+            btnPayPopPayUpi.isEnabled = false
+            Toast.makeText(this, "Generating PopPay order...", Toast.LENGTH_SHORT).show()
+
+            PopPayClient.createOrder(this, token, amount = "100.00") { result ->
+                btnPayPopPayUpi.isEnabled = true
+                result.onSuccess { order ->
+                    val opened = PopPayClient.openUpiIntent(this, upiUrl = order.upiDeepLink, amount = order.payableAmount, orderId = order.orderId)
+                    if (!opened) {
+                        Toast.makeText(this, "No UPI app found. Opening PopPay checkout...", Toast.LENGTH_SHORT).show()
+                        PopPayClient.openPopPayWebCheckout(this, checkoutUrl = order.checkoutUrl)
+                    }
+                }.onFailure {
+                    PopPayClient.openUpiIntent(this, amount = "100")
+                }
             }
         }
 
         btnPopPayWeb.setOnClickListener {
-            PopPayClient.openPopPayWebCheckout(this)
+            val token = currentSession?.token ?: ""
+            btnPopPayWeb.isEnabled = false
+            PopPayClient.createOrder(this, token, amount = "100.00") { result ->
+                btnPopPayWeb.isEnabled = true
+                result.onSuccess { order ->
+                    PopPayClient.openPopPayWebCheckout(this, checkoutUrl = order.checkoutUrl)
+                }.onFailure {
+                    PopPayClient.openPopPayWebCheckout(this)
+                }
+            }
         }
 
         btnSubmitUtr.setOnClickListener {
