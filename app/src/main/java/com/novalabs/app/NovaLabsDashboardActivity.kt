@@ -37,11 +37,13 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
     private lateinit var btnConfigApi: MaterialButton
 
     // Pricing & PopPay Tab Views
-    private lateinit var btnPayPopPayUpi: MaterialButton
-    private lateinit var btnPopPayWeb: MaterialButton
+    private lateinit var btnPayPopPayNormal: MaterialButton
+    private lateinit var btnCancelSubscription: MaterialButton
+    private lateinit var tvLivePollingStatus: TextView
     private lateinit var etUtrNumber: TextInputEditText
     private lateinit var btnSubmitUtr: MaterialButton
     private lateinit var tvUtrStatus: TextView
+    private var stopPollingFn: (() -> Unit)? = null
 
     // Sessions Tab Views
     private lateinit var tvUsername: TextView
@@ -80,8 +82,9 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
         tvPlanBadge = findViewById(R.id.tvPlanBadge)
         btnConfigApi = findViewById(R.id.btnConfigApi)
 
-        btnPayPopPayUpi = findViewById(R.id.btnPayPopPayUpi)
-        btnPopPayWeb = findViewById(R.id.btnPopPayWeb)
+        btnPayPopPayNormal = findViewById(R.id.btnPayPopPayNormal)
+        btnCancelSubscription = findViewById(R.id.btnCancelSubscription)
+        tvLivePollingStatus = findViewById(R.id.tvLivePollingStatus)
         etUtrNumber = findViewById(R.id.etUtrNumber)
         btnSubmitUtr = findViewById(R.id.btnSubmitUtr)
         tvUtrStatus = findViewById(R.id.tvUtrStatus)
@@ -193,37 +196,74 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             finish()
         }
 
-        // PopPay & UPI Payments
-        btnPayPopPayUpi.setOnClickListener {
+        // Real PopPay In-App Modal Checkout Flow
+        btnPayPopPayNormal.setOnClickListener {
             val token = currentSession?.token ?: ""
-            btnPayPopPayUpi.isEnabled = false
-            Toast.makeText(this, "Generating PopPay order...", Toast.LENGTH_SHORT).show()
+            btnPayPopPayNormal.isEnabled = false
+            tvLivePollingStatus.visibility = View.VISIBLE
+            tvLivePollingStatus.setTextColor(Color.parseColor("#38BDF8"))
+            tvLivePollingStatus.text = "Initializing in-app PopPay checkout..."
 
-            PopPayClient.createOrder(this, token, amount = "100.00") { result ->
-                btnPayPopPayUpi.isEnabled = true
+            PopPayClient.createRealOrder(amount = "100.00") { result ->
+                btnPayPopPayNormal.isEnabled = true
                 result.onSuccess { order ->
-                    val opened = PopPayClient.openUpiIntent(this, upiUrl = order.upiDeepLink, amount = order.payableAmount, orderId = order.orderId)
-                    if (!opened) {
-                        Toast.makeText(this, "No UPI app found. Opening PopPay checkout...", Toast.LENGTH_SHORT).show()
-                        PopPayClient.openPopPayWebCheckout(this, checkoutUrl = order.checkoutUrl)
-                    }
-                }.onFailure {
-                    PopPayClient.openUpiIntent(this, amount = "100")
+                    tvLivePollingStatus.text = "Opening PopPay checkout modal..."
+
+                    // Open inside the App via PopPayModalDialog (In-App WebView like checkout.js)
+                    PopPayModalDialog.show(
+                        context = this,
+                        orderId = order.orderId,
+                        amount = order.payableAmount,
+                        checkoutUrl = order.checkoutUrl,
+                        callback = object : PopPayModalDialog.PopPayCallback {
+                            override fun onPaymentSuccess(orderId: String, paymentId: String, utr: String, signature: String) {
+                                tvLivePollingStatus.setTextColor(Color.parseColor("#57F287"))
+                                tvLivePollingStatus.text = "✓ Payment Verified! UTR: $utr. Premium Activated!"
+                                currentSession?.let {
+                                    val updated = it.copy(isPremium = true)
+                                    SessionManager.saveSession(this@NovaLabsDashboardActivity, updated, setActive = true)
+                                    loadActiveSession()
+                                }
+                            }
+
+                            override fun onDismiss() {
+                                tvLivePollingStatus.setTextColor(Color.parseColor("#94A3B8"))
+                                tvLivePollingStatus.text = "PopPay checkout dismissed."
+                            }
+                        }
+                    )
+
+                    // Also start background polling in case user pays in external UPI app
+                    stopPollingFn?.invoke()
+                    stopPollingFn = PopPayClient.startStatusPolling(
+                        orderId = order.orderId,
+                        onStatus = { st ->
+                            tvLivePollingStatus.text = "Order ${order.orderId}: $st"
+                        },
+                        onPaid = { utr, _ ->
+                            tvLivePollingStatus.setTextColor(Color.parseColor("#57F287"))
+                            tvLivePollingStatus.text = "✓ Payment Received! UTR: $utr. Premium Activated!"
+                            currentSession?.let {
+                                val updated = it.copy(isPremium = true)
+                                SessionManager.saveSession(this, updated, setActive = true)
+                                loadActiveSession()
+                            }
+                        }
+                    )
+                }.onFailure { err ->
+                    tvLivePollingStatus.setTextColor(Color.parseColor("#EF4444"))
+                    tvLivePollingStatus.text = "Failed to launch PopPay: ${err.localizedMessage}"
                 }
             }
         }
 
-        btnPopPayWeb.setOnClickListener {
-            val token = currentSession?.token ?: ""
-            btnPopPayWeb.isEnabled = false
-            PopPayClient.createOrder(this, token, amount = "100.00") { result ->
-                btnPopPayWeb.isEnabled = true
-                result.onSuccess { order ->
-                    PopPayClient.openPopPayWebCheckout(this, checkoutUrl = order.checkoutUrl)
-                }.onFailure {
-                    PopPayClient.openPopPayWebCheckout(this)
-                }
-            }
+        // Cancel Subscription / Reset
+        btnCancelSubscription.setOnClickListener {
+            stopPollingFn?.invoke()
+            tvLivePollingStatus.visibility = View.VISIBLE
+            tvLivePollingStatus.setTextColor(Color.parseColor("#EF4444"))
+            tvLivePollingStatus.text = "Subscription session cancelled."
+            Toast.makeText(this, "Subscription checkout dismissed", Toast.LENGTH_SHORT).show()
         }
 
         btnSubmitUtr.setOnClickListener {

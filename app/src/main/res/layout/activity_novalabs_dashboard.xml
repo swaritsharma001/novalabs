@@ -311,41 +311,40 @@
                     android:textColor="#94A3B8"
                     android:textSize="12sp" />
 
-                <LinearLayout
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPayPopPayNormal"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="16dp"
+                    android:backgroundTint="#7C3AED"
+                    android:text="⚡ Pay with PopPay (₹100)"
+                    android:textAllCaps="false"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="10dp" />
+
+                <!-- Cancel Subscription Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCancelSubscription"
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="4dp"
+                    android:text="Cancel Subscription / Dismiss"
+                    android:textAllCaps="false"
+                    android:textColor="#EF4444"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/tvLivePollingStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:orientation="horizontal">
-
-                    <!-- Instant Pay via PopPay / UPI App -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPayPopPayUpi"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginEnd="6dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="#7C3AED"
-                        android:text="⚡ Pay via UPI"
-                        android:textAllCaps="false"
-                        android:textColor="#FFFFFF"
-                        android:textSize="13sp"
-                        app:cornerRadius="10dp" />
-
-                    <!-- PopPay Web Checkout (poppay.tech) -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPopPayWeb"
-                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="PopPay Gateway"
-                        android:textAllCaps="false"
-                        android:textColor="#38BDF8"
-                        android:textSize="13sp"
-                        app:cornerRadius="10dp"
-                        app:strokeColor="#38BDF8" />
-                </LinearLayout>
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:textColor="#38BDF8"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/tvUpiIdDisplay"

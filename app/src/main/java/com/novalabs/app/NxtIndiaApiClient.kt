@@ -30,7 +30,7 @@ object NxtIndiaApiClient {
 
     private const val PREFS_NAME = "nxt_india_api_prefs"
     private const val KEY_BASE_URL = "api_base_url"
-    private const val DEFAULT_BASE_URL = "http://10.0.2.2:5000"
+    private const val DEFAULT_BASE_URL = "https://administrator-barrier-expired-cannon.trycloudflare.com"
 
     private val client = OkHttpClient()
     private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
