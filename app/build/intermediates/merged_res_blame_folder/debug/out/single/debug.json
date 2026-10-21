@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.novalabs.app-merged_res-31:/layout_activity_novalabs_dashboard.xml.flat",
+        "source": "com.novalabs.app-main-33:/layout/activity_novalabs_dashboard.xml"
+    },
+    {
+        "merged": "com.novalabs.app-merged_res-31:/layout_activity_login.xml.flat",
+        "source": "com.novalabs.app-main-33:/layout/activity_login.xml"
+    }
+]
