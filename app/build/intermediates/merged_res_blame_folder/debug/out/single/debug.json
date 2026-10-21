@@ -4,7 +4,15 @@
         "source": "com.novalabs.app-main-33:/layout/activity_novalabs_dashboard.xml"
     },
     {
-        "merged": "com.novalabs.app-merged_res-31:/layout_activity_login.xml.flat",
-        "source": "com.novalabs.app-main-33:/layout/activity_login.xml"
+        "merged": "com.novalabs.app-merged_res-31:/layout_item_bot_session.xml.flat",
+        "source": "com.novalabs.app-main-33:/layout/item_bot_session.xml"
+    },
+    {
+        "merged": "C:\\Users\\Administrator\\.gradle\\daemon\\8.2\\com.novalabs.app-merged_res-31:\\layout_activity_login.xml.flat",
+        "source": "C:\\Users\\Administrator\\.gradle\\daemon\\8.2\\com.novalabs.app-main-33:\\layout\\activity_login.xml"
+    },
+    {
+        "merged": "C:\\Users\\Administrator\\.gradle\\daemon\\8.2\\com.novalabs.app-merged_res-31:\\layout_activity_novalabs_dashboard.xml.flat",
+        "source": "C:\\Users\\Administrator\\.gradle\\daemon\\8.2\\com.novalabs.app-main-33:\\layout\\activity_novalabs_dashboard.xml"
     }
 ]

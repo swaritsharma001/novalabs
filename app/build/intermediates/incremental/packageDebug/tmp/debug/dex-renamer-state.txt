@@ -1,4 +1,4 @@
-#Wed Oct 21 07:11:21 UTC 2026
+#Wed Oct 21 07:33:17 UTC 2026
 base.2=C\:\\Users\\Administrator\\Documents\\antigravity\\splendid-faraday\\NovaLabsApp\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\15\\classes.dex
 path.2=15/classes.dex
 base.1=C\:\\Users\\Administrator\\Documents\\antigravity\\splendid-faraday\\NovaLabsApp\\app\\build\\intermediates\\dex\\debug\\mergeProjectDexDebug\\0\\classes.dex

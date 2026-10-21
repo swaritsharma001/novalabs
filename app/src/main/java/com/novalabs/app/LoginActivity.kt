@@ -293,6 +293,18 @@ class LoginActivity : AppCompatActivity() {
             .putString(KEY_STORE_AUTHED_USER_ID, userId)
             .apply()
 
+        // Save session in SessionManager for multi-account session management
+        SessionManager.saveSession(
+            this,
+            UserSession(
+                id = userId,
+                username = username,
+                token = token,
+                isPremium = false
+            ),
+            setActive = true
+        )
+
         // Report telemetry to Bluecord API
         BluecordApiClient.sendEvent("LOGIN", "User $userId ($username) authenticated")
 
