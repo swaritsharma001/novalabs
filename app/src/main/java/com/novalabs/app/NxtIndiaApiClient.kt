@@ -3,169 +3,198 @@ package com.novalabs.app
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
-import java.nio.charset.StandardCharsets
+import java.io.IOException
 
 data class NxtBot(
     val id: String,
     val username: String,
-    val isRunning: Boolean,
-    val isBanned: Boolean,
-    val lastActive: String?,
-    val ramUsage: String?,
-    val cpuUsage: String?,
-    val latency: String?
+    val avatar: String? = null,
+    val isRunning: Boolean = false,
+    val isBanned: Boolean = false,
+    val ramUsage: String? = null,
+    val cpuUsage: String? = null,
+    val latency: String? = null,
+    val uptime: String? = null
 )
 
 object NxtIndiaApiClient {
 
-    private const val PREFS_NAME = "nxt_api_config"
-    private const val KEY_CUSTOM_URL = "custom_backend_url"
-    
-    // Default URL pointing to local server or deployed instance
-    private const val DEFAULT_BACKEND_URL = "http://10.0.2.2:5000"
+    private const val PREFS_NAME = "nxt_india_api_prefs"
+    private const val KEY_BASE_URL = "api_base_url"
+    private const val DEFAULT_BASE_URL = "http://10.0.2.2:5000"
 
+    private val client = OkHttpClient()
+    private val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
     private val mainHandler = Handler(Looper.getMainLooper())
 
     fun getBaseUrl(context: Context): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_CUSTOM_URL, DEFAULT_BACKEND_URL) ?: DEFAULT_BACKEND_URL
+        return prefs.getString(KEY_BASE_URL, DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL
     }
 
     fun setBaseUrl(context: Context, url: String) {
-        val trimmed = url.trim().removeSuffix("/")
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_CUSTOM_URL, trimmed)
-            .apply()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_BASE_URL, url.trimEnd('/')).apply()
     }
 
-    fun fetchUserProfile(context: Context, token: String, callback: (Result<JSONObject>) -> Unit) {
-        Thread {
-            try {
-                val url = URL("${getBaseUrl(context)}/auth/user")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    setRequestProperty("Authorization", token)
-                    connectTimeout = 6000
-                    readTimeout = 6000
-                }
+    /**
+     * Submit UTR Reference Number (PricingTab.tsx /core/utr)
+     */
+    fun submitUtr(context: Context, userToken: String, utr: String, callback: (Result<String>) -> Unit) {
+        val url = "${getBaseUrl(context)}/core/utr"
+        val json = JSONObject().apply {
+            put("utr", utr)
+        }
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", userToken)
+            .post(json.toString().toRequestBody(JSON_MEDIA))
+            .build()
 
-                val responseCode = conn.responseCode
-                val stream: InputStream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
-                val body = stream.bufferedReader().use { it.readText() }
-
-                if (responseCode == 200) {
-                    val json = JSONObject(body)
-                    mainHandler.post { callback(Result.success(json)) }
-                } else {
-                    mainHandler.post { callback(Result.failure(Exception("HTTP $responseCode: $body"))) }
-                }
-            } catch (e: Exception) {
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post { callback(Result.failure(e)) }
             }
-        }.start()
-    }
 
-    fun fetchBots(context: Context, token: String, callback: (Result<List<NxtBot>>) -> Unit) {
-        Thread {
-            try {
-                val url = URL("${getBaseUrl(context)}/core/bots")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "GET"
-                    setRequestProperty("Authorization", token)
-                    connectTimeout = 8000
-                    readTimeout = 8000
-                }
-
-                val responseCode = conn.responseCode
-                if (responseCode == 200) {
-                    val body = conn.inputStream.bufferedReader().use { it.readText() }
-                    val array = JSONArray(body)
-                    val bots = mutableListOf<NxtBot>()
-                    for (i in 0 until array.length()) {
-                        val obj = array.getJSONObject(i)
-                        bots.add(
-                            NxtBot(
-                                id = obj.getString("_id"),
-                                username = obj.optString("username", "Unknown Bot"),
-                                isRunning = obj.optBoolean("isRunning", false),
-                                isBanned = obj.optBoolean("isBanned", false),
-                                lastActive = obj.optString("lastActive", null),
-                                ramUsage = obj.optString("ramUsage", "0 MB"),
-                                cpuUsage = obj.optString("cpuUsage", "0%"),
-                                latency = obj.optString("latency", null)
-                            )
-                        )
+            override fun onResponse(call: Call, response: Response) {
+                val resBody = response.body?.string().orEmpty()
+                mainHandler.post {
+                    if (response.isSuccessful) {
+                        callback(Result.success("UTR submitted successfully!"))
+                    } else {
+                        val errMsg = try {
+                            val obj = JSONObject(resBody)
+                            obj.optString("message", obj.optString("error", "Failed to submit UTR"))
+                        } catch (e: Exception) {
+                            "Failed to submit UTR: HTTP ${response.code}"
+                        }
+                        callback(Result.failure(Exception(errMsg)))
                     }
-                    mainHandler.post { callback(Result.success(bots)) }
-                } else {
-                    val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "Error"
-                    mainHandler.post { callback(Result.failure(Exception(errorStream))) }
                 }
-            } catch (e: Exception) {
+            }
+        })
+    }
+
+    fun fetchBots(context: Context, userToken: String, callback: (Result<List<NxtBot>>) -> Unit) {
+        val url = "${getBaseUrl(context)}/core/bots"
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", userToken)
+            .get()
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                mainHandler.post {
+                    callback(Result.failure(e))
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string().orEmpty()
+                mainHandler.post {
+                    if (response.isSuccessful) {
+                        try {
+                            val botsList = mutableListOf<NxtBot>()
+                            val array = JSONArray(body)
+                            for (i in 0 until array.length()) {
+                                val item = array.getJSONObject(i)
+                                botsList.add(
+                                    NxtBot(
+                                        id = item.optString("id", "$i"),
+                                        username = item.optString("username", "Discord Bot #$i"),
+                                        avatar = item.optString("avatar", null),
+                                        isRunning = item.optBoolean("isRunning", false),
+                                        uptime = item.optString("uptime", null)
+                                    )
+                                )
+                            }
+                            callback(Result.success(botsList))
+                        } catch (e: Exception) {
+                            callback(Result.failure(e))
+                        }
+                    } else {
+                        callback(Result.failure(Exception("Failed to fetch bots: HTTP ${response.code}")))
+                    }
+                }
+            }
+        })
+    }
+
+    fun startBot(context: Context, userToken: String, botId: String, callback: (Result<Boolean>) -> Unit) {
+        postBotAction(context, userToken, "start", botId, callback)
+    }
+
+    fun stopBot(context: Context, userToken: String, botId: String, callback: (Result<Boolean>) -> Unit) {
+        postBotAction(context, userToken, "stop", botId, callback)
+    }
+
+    fun deleteBot(context: Context, userToken: String, botId: String, callback: (Result<Boolean>) -> Unit) {
+        postBotAction(context, userToken, "delete", botId, callback)
+    }
+
+    private fun postBotAction(context: Context, userToken: String, action: String, botId: String, callback: (Result<Boolean>) -> Unit) {
+        val url = "${getBaseUrl(context)}/core/$action"
+        val json = JSONObject().apply {
+            put("botId", botId)
+        }
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", userToken)
+            .post(json.toString().toRequestBody(JSON_MEDIA))
+            .build()
+
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post { callback(Result.failure(e)) }
             }
-        }.start()
-    }
 
-    fun startBot(context: Context, token: String, botId: String, callback: (Result<String>) -> Unit) {
-        postJson(context, "/core/start", token, JSONObject().apply { put("id", botId) }, callback)
-    }
-
-    fun stopBot(context: Context, token: String, botId: String, callback: (Result<String>) -> Unit) {
-        postJson(context, "/core/stop", token, JSONObject().apply { put("id", botId) }, callback)
-    }
-
-    fun addBotToken(context: Context, token: String, botToken: String, callback: (Result<String>) -> Unit) {
-        postJson(context, "/core/token", token, JSONObject().apply { put("token", botToken) }, callback)
-    }
-
-    fun deleteBot(context: Context, token: String, botId: String, callback: (Result<String>) -> Unit) {
-        postJson(context, "/core/delete", token, JSONObject().apply { put("id", botId) }, callback)
-    }
-
-    private fun postJson(
-        context: Context,
-        endpoint: String,
-        token: String,
-        payload: JSONObject,
-        callback: (Result<String>) -> Unit
-    ) {
-        Thread {
-            try {
-                val url = URL("${getBaseUrl(context)}$endpoint")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json")
-                    setRequestProperty("Authorization", token)
-                    connectTimeout = 8000
-                    readTimeout = 8000
-                    doOutput = true
+            override fun onResponse(call: Call, response: Response) {
+                mainHandler.post {
+                    if (response.isSuccessful) {
+                        callback(Result.success(true))
+                    } else {
+                        callback(Result.failure(Exception("Action $action failed: HTTP ${response.code}")))
+                    }
                 }
+            }
+        })
+    }
 
-                conn.outputStream.use {
-                    it.write(payload.toString().toByteArray(StandardCharsets.UTF_8))
-                }
+    fun addBotToken(context: Context, userToken: String, botToken: String, callback: (Result<Boolean>) -> Unit) {
+        val url = "${getBaseUrl(context)}/core/token"
+        val json = JSONObject().apply {
+            put("token", botToken)
+        }
+        val request = Request.Builder()
+            .url(url)
+            .addHeader("Authorization", userToken)
+            .post(json.toString().toRequestBody(JSON_MEDIA))
+            .build()
 
-                val responseCode = conn.responseCode
-                val stream = if (responseCode in 200..299) conn.inputStream else conn.errorStream
-                val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
-
-                if (responseCode in 200..299) {
-                    val msg = try { JSONObject(body).optString("message", "Success") } catch (_: Exception) { body }
-                    mainHandler.post { callback(Result.success(msg)) }
-                } else {
-                    val msg = try { JSONObject(body).optString("message", "Failed: HTTP $responseCode") } catch (_: Exception) { "Failed: HTTP $responseCode" }
-                    mainHandler.post { callback(Result.failure(Exception(msg))) }
-                }
-            } catch (e: Exception) {
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
                 mainHandler.post { callback(Result.failure(e)) }
             }
-        }.start()
+
+            override fun onResponse(call: Call, response: Response) {
+                mainHandler.post {
+                    if (response.isSuccessful) {
+                        callback(Result.success(true))
+                    } else {
+                        callback(Result.failure(Exception("Add bot token failed: HTTP ${response.code}")))
+                    }
+                }
+            }
+        })
     }
 }

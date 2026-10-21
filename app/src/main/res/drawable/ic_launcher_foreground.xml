@@ -1,0 +1,47 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.65"
+        android:scaleY="0.65"
+        android:translateX="18.9"
+        android:translateY="18.9">
+        
+        <!-- NXT Neon Robot Head / Hexagon Shield -->
+        <path
+            android:fillColor="#5865F2"
+            android:pathData="M54,16 L88,32 L88,72 L54,88 L20,72 L20,32 Z" />
+            
+        <path
+            android:fillColor="#0B0F19"
+            android:pathData="M54,22 L82,35 L82,69 L54,82 L26,69 L26,35 Z" />
+
+        <!-- Antennas / Tech Circuit -->
+        <path
+            android:fillColor="#A855F7"
+            android:pathData="M48,10 L52,10 L52,20 L48,20 Z" />
+        <path
+            android:fillColor="#A855F7"
+            android:pathData="M56,10 L60,10 L60,20 L56,20 Z" />
+
+        <!-- Glowing Visor / Eyes -->
+        <path
+            android:fillColor="#A855F7"
+            android:pathData="M34,44 L74,44 L70,54 L38,54 Z" />
+
+        <!-- Bot Eyes Glowing Cyan -->
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M40,47 L48,47 L48,51 L40,51 Z" />
+        <path
+            android:fillColor="#38BDF8"
+            android:pathData="M60,47 L68,47 L68,51 L60,51 Z" />
+
+        <!-- Center Tech Pulse -->
+        <path
+            android:fillColor="#818CF8"
+            android:pathData="M44,62 L64,62 L54,72 Z" />
+    </group>
+</vector>

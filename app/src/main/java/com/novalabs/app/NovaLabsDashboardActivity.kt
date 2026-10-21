@@ -11,23 +11,44 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.NestedScrollView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.textfield.TextInputEditText
 
 class NovaLabsDashboardActivity : AppCompatActivity() {
 
-    private lateinit var tvUsername: TextView
-    private lateinit var tvUserId: TextView
-    private lateinit var tvPremiumBadge: TextView
+    // Tab buttons & containers
+    private lateinit var tabBots: MaterialButton
+    private lateinit var tabPricing: MaterialButton
+    private lateinit var tabSessions: MaterialButton
+    private lateinit var containerBotsTab: NestedScrollView
+    private lateinit var containerPricingTab: NestedScrollView
+    private lateinit var containerSessionsTab: NestedScrollView
+
+    // Bots Tab Views
     private lateinit var rvBots: RecyclerView
     private lateinit var tvEmptyBots: TextView
     private lateinit var btnRefreshBots: MaterialButton
     private lateinit var btnAddBot: MaterialButton
+    private lateinit var tvPlanBadge: TextView
+    private lateinit var btnConfigApi: MaterialButton
+
+    // Pricing & PopPay Tab Views
+    private lateinit var btnPayPopPayUpi: MaterialButton
+    private lateinit var btnPopPayWeb: MaterialButton
+    private lateinit var etUtrNumber: TextInputEditText
+    private lateinit var btnSubmitUtr: MaterialButton
+    private lateinit var tvUtrStatus: TextView
+
+    // Sessions Tab Views
+    private lateinit var tvUsername: TextView
+    private lateinit var tvUserId: TextView
+    private lateinit var tvPremiumBadge: TextView
     private lateinit var btnSwitchAccount: MaterialButton
     private lateinit var btnLogout: MaterialButton
-    private lateinit var btnConfigApi: MaterialButton
 
     private lateinit var botAdapter: BotAdapter
     private var currentSession: UserSession? = null
@@ -37,6 +58,7 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
         setContentView(R.layout.activity_novalabs_dashboard)
 
         initViews()
+        setupTabs()
         loadActiveSession()
         setupRecyclerView()
         setupListeners()
@@ -44,23 +66,64 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
     }
 
     private fun initViews() {
-        tvUsername = findViewById(R.id.tvUsername)
-        tvUserId = findViewById(R.id.tvUserId)
-        tvPremiumBadge = findViewById(R.id.tvPremiumBadge)
+        tabBots = findViewById(R.id.tabBots)
+        tabPricing = findViewById(R.id.tabPricing)
+        tabSessions = findViewById(R.id.tabSessions)
+        containerBotsTab = findViewById(R.id.containerBotsTab)
+        containerPricingTab = findViewById(R.id.containerPricingTab)
+        containerSessionsTab = findViewById(R.id.containerSessionsTab)
+
         rvBots = findViewById(R.id.rvBots)
         tvEmptyBots = findViewById(R.id.tvEmptyBots)
         btnRefreshBots = findViewById(R.id.btnRefreshBots)
         btnAddBot = findViewById(R.id.btnAddBot)
+        tvPlanBadge = findViewById(R.id.tvPlanBadge)
+        btnConfigApi = findViewById(R.id.btnConfigApi)
+
+        btnPayPopPayUpi = findViewById(R.id.btnPayPopPayUpi)
+        btnPopPayWeb = findViewById(R.id.btnPopPayWeb)
+        etUtrNumber = findViewById(R.id.etUtrNumber)
+        btnSubmitUtr = findViewById(R.id.btnSubmitUtr)
+        tvUtrStatus = findViewById(R.id.tvUtrStatus)
+
+        tvUsername = findViewById(R.id.tvUsername)
+        tvUserId = findViewById(R.id.tvUserId)
+        tvPremiumBadge = findViewById(R.id.tvPremiumBadge)
         btnSwitchAccount = findViewById(R.id.btnSwitchAccount)
         btnLogout = findViewById(R.id.btnLogout)
-        btnConfigApi = findViewById(R.id.btnConfigApi)
+    }
+
+    private fun setupTabs() {
+        tabBots.setOnClickListener { switchTab(0) }
+        tabPricing.setOnClickListener { switchTab(1) }
+        tabSessions.setOnClickListener { switchTab(2) }
+    }
+
+    private fun switchTab(index: Int) {
+        val activeBg = Color.parseColor("#7C3AED")
+        val inactiveBg = Color.TRANSPARENT
+        val activeText = Color.WHITE
+        val inactiveText = Color.parseColor("#94A3B8")
+
+        // Reset
+        tabBots.setBackgroundColor(if (index == 0) activeBg else inactiveBg)
+        tabBots.setTextColor(if (index == 0) activeText else inactiveText)
+        containerBotsTab.visibility = if (index == 0) View.VISIBLE else View.GONE
+
+        tabPricing.setBackgroundColor(if (index == 1) activeBg else inactiveBg)
+        tabPricing.setTextColor(if (index == 1) activeText else inactiveText)
+        containerPricingTab.visibility = if (index == 1) View.VISIBLE else View.GONE
+
+        tabSessions.setBackgroundColor(if (index == 2) activeBg else inactiveBg)
+        tabSessions.setTextColor(if (index == 2) activeText else inactiveText)
+        containerSessionsTab.visibility = if (index == 2) View.VISIBLE else View.GONE
     }
 
     private fun loadActiveSession() {
         currentSession = SessionManager.getActiveSession(this)
 
         if (currentSession == null) {
-            val username = intent.getStringExtra("EXTRA_USER_NAME") ?: "Nova User"
+            val username = intent.getStringExtra("EXTRA_USER_NAME") ?: "NxtIndia User"
             val userId = intent.getStringExtra("EXTRA_USER_ID") ?: "10839201948102"
             val prefs = getSharedPreferences("novalabs_auth_prefs", Context.MODE_PRIVATE)
             val token = prefs.getString("STORE_AUTHED_TOKEN", "") ?: ""
@@ -77,8 +140,17 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
         currentSession?.let {
             tvUsername.text = it.username
             tvUserId.text = "ID: ${it.id}"
-            tvPremiumBadge.text = if (it.isPremium) "★ Premium" else "Free Tier"
-            tvPremiumBadge.setTextColor(if (it.isPremium) Color.parseColor("#57F287") else Color.parseColor("#FEE75C"))
+            if (it.isPremium) {
+                tvPremiumBadge.text = "★ Premium Active"
+                tvPremiumBadge.setTextColor(Color.parseColor("#57F287"))
+                tvPlanBadge.text = "Premium (Unlimited)"
+                tvPlanBadge.setTextColor(Color.parseColor("#57F287"))
+            } else {
+                tvPremiumBadge.text = "Free Tier"
+                tvPremiumBadge.setTextColor(Color.parseColor("#FEE75C"))
+                tvPlanBadge.text = "Free Tier (2 Max)"
+                tvPlanBadge.setTextColor(Color.parseColor("#FEE75C"))
+            }
         }
     }
 
@@ -101,12 +173,12 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             showAddBotDialog()
         }
 
-        btnSwitchAccount.setOnClickListener {
-            showAccountSwitcherDialog()
-        }
-
         btnConfigApi.setOnClickListener {
             showApiConfigDialog()
+        }
+
+        btnSwitchAccount.setOnClickListener {
+            showAccountSwitcherDialog()
         }
 
         btnLogout.setOnClickListener {
@@ -120,6 +192,49 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         }
+
+        // PopPay & UPI Payments
+        btnPayPopPayUpi.setOnClickListener {
+            val opened = PopPayClient.openUpiIntent(this, amount = "100")
+            if (!opened) {
+                Toast.makeText(this, "No UPI app found. Opening PopPay checkout portal...", Toast.LENGTH_SHORT).show()
+                PopPayClient.openPopPayWebCheckout(this)
+            }
+        }
+
+        btnPopPayWeb.setOnClickListener {
+            PopPayClient.openPopPayWebCheckout(this)
+        }
+
+        btnSubmitUtr.setOnClickListener {
+            val utr = etUtrNumber.text?.toString()?.trim().orEmpty()
+            if (utr.isEmpty()) {
+                Toast.makeText(this, "Please enter your 12-digit UTR number", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val token = currentSession?.token ?: return@setOnClickListener
+            btnSubmitUtr.isEnabled = false
+            tvUtrStatus.visibility = View.VISIBLE
+            tvUtrStatus.text = "Verifying UTR transaction..."
+
+            NxtIndiaApiClient.submitUtr(this, token, utr) { result ->
+                btnSubmitUtr.isEnabled = true
+                result.onSuccess { msg ->
+                    tvUtrStatus.setTextColor(Color.parseColor("#57F287"))
+                    tvUtrStatus.text = "✓ $msg Premium activated!"
+                    etUtrNumber.setText("")
+                    currentSession?.let {
+                        val updated = it.copy(isPremium = true)
+                        SessionManager.saveSession(this, updated, setActive = true)
+                        loadActiveSession()
+                    }
+                }.onFailure { err ->
+                    tvUtrStatus.setTextColor(Color.parseColor("#EF4444"))
+                    tvUtrStatus.text = "✗ ${err.localizedMessage ?: "UTR submission failed"}"
+                }
+            }
+        }
     }
 
     private fun loadBotsData() {
@@ -132,7 +247,6 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
                 botAdapter.updateData(bots)
                 tvEmptyBots.visibility = if (bots.isEmpty()) View.VISIBLE else View.GONE
             }.onFailure { err ->
-                // If backend is unreachable or local, show helpful info & default demo sessions
                 tvEmptyBots.visibility = View.VISIBLE
                 tvEmptyBots.text = "Backend status: ${err.localizedMessage ?: "Connecting..."}\nTap 'API Host' to set backend URL or '+ Add Bot' to connect."
             }
@@ -189,7 +303,7 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             hint = "Enter Discord Bot Token..."
             setHintTextColor(Color.LTGRAY)
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#1E1F22"))
+            setBackgroundColor(Color.parseColor("#0F172A"))
             setPadding(40, 32, 40, 32)
         }
 
@@ -203,7 +317,7 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Add New Bot Session")
+            .setTitle("Add Discord Bot")
             .setMessage("Paste your Discord Bot token to host it on NXT India:")
             .setView(container)
             .setPositiveButton("Add Bot") { _, _ ->
@@ -226,9 +340,6 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             .show()
     }
 
-    /**
-     * Bluecord Account Switcher: Allows seamless multi-session account switching
-     */
     private fun showAccountSwitcherDialog() {
         val sessions = SessionManager.getSessions(this)
         val activeId = currentSession?.id
@@ -244,7 +355,6 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             .setTitle("Switch Account / Session")
             .setItems(items) { _, which ->
                 if (which == items.size - 1) {
-                    // Open LoginActivity to add a new account session
                     startActivity(Intent(this, LoginActivity::class.java))
                 } else {
                     val selected = sessions[which]
@@ -264,7 +374,7 @@ class NovaLabsDashboardActivity : AppCompatActivity() {
             setText(currentUrl)
             setHintTextColor(Color.LTGRAY)
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#1E1F22"))
+            setBackgroundColor(Color.parseColor("#0F172A"))
             setPadding(40, 32, 40, 32)
         }
 

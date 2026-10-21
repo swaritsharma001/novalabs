@@ -1,10 +1,13 @@
 <resources>
     <style name="Theme.NovaLabs" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#5865F2</item>
-        <item name="colorPrimaryVariant">#4752C4</item>
+        <!-- NXT India Brand Neon Violet / Indigo Palette -->
+        <item name="colorPrimary">#A855F7</item>
+        <item name="colorPrimaryVariant">#7C3AED</item>
+        <item name="colorSecondary">#38BDF8</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="android:statusBarColor">#121214</item>
-        <item name="android:windowBackground">#121214</item>
+        <item name="android:statusBarColor">#030712</item>
+        <item name="android:windowBackground">#030712</item>
+        <item name="android:navigationBarColor">#0B0F19</item>
     </style>
 
     <style name="CircularImageViewStyle">
